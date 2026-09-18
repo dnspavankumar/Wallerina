@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "@/components/Button";
 import Panel from "@/components/Panel";
 import Stat from "@/components/Stat";
 import Table from "@/components/Table";
-import { fetchDraftSwaps } from "@/lib/api";
+import { emailDraftSwaps, fetchDraftSwaps } from "@/lib/api";
 import { quantity, ratio, timeLabel, usd } from "@/lib/format";
 import styles from "../page.module.css";
 
@@ -20,14 +20,25 @@ const COLUMNS = [
 /* Base units to a display number. Precision loss is fine for display. */
 const tokenAmount = (units, decimals) => Number(units) / 10 ** decimals;
 
+/* The "Why" column states each leg's share of portfolio risk, e.g. "Carries
+   80% of portfolio risk at 38% weight" — pulled back out so legs can be
+   ranked by it. Legs without a parseable share sort to the end. */
+const RISK_SHARE_PATTERN = /carries\s+([\d.]+)\s*%\s+of\s+portfolio\s+risk/i;
+const riskShare = (leg) => {
+  const match = RISK_SHARE_PATTERN.exec(leg.reason || "");
+  return match ? Number(match[1]) : -1;
+};
+
 export default function DraftSwapsPanel({ address, goal }) {
   const [state, setState] = useState({ status: "idle", plan: null, error: null });
+  const [emailStatus, setEmailStatus] = useState(null);
   const controller = useRef(null);
 
   // A different wallet or goal makes any drafts on screen stale.
   useEffect(() => {
     controller.current?.abort();
     setState({ status: "idle", plan: null, error: null });
+    setEmailStatus(null);
   }, [address, goal]);
 
   useEffect(() => () => controller.current?.abort(), []);
@@ -36,9 +47,28 @@ export default function DraftSwapsPanel({ address, goal }) {
     controller.current?.abort();
     controller.current = new AbortController();
     setState((previous) => ({ ...previous, status: "loading", error: null }));
+    setEmailStatus(null);
 
     fetchDraftSwaps(address, { goal, signal: controller.current.signal })
-      .then((plan) => setState({ status: "ready", plan, error: null }))
+      .then((plan) => {
+        setState({ status: "ready", plan, error: null });
+
+        let email = "";
+        try {
+          email = window.localStorage.getItem("email")?.trim() ?? "";
+        } catch {
+          // Storage may be unavailable; just skip the email.
+        }
+        if (!email) {
+          setEmailStatus("unset");
+          return;
+        }
+
+        setEmailStatus("sending");
+        emailDraftSwaps(address, { email, plan })
+          .then(() => setEmailStatus("sent"))
+          .catch(() => setEmailStatus("failed"));
+      })
       .catch((error) => {
         if (error.name !== "AbortError") setState({ status: "error", plan: null, error });
       });
@@ -47,6 +77,10 @@ export default function DraftSwapsPanel({ address, goal }) {
   const { status, plan, error } = state;
   const loading = status === "loading";
   const totalUsd = plan?.legs.reduce((sum, leg) => sum + leg.sell_value_usd, 0) ?? 0;
+  const sortedLegs = useMemo(
+    () => (plan ? [...plan.legs].sort((a, b) => riskShare(b) - riskShare(a)) : []),
+    [plan]
+  );
 
   return (
     <Panel
@@ -101,7 +135,7 @@ export default function DraftSwapsPanel({ address, goal }) {
           ) : (
             <Table
               columns={COLUMNS}
-              rows={plan.legs}
+              rows={sortedLegs}
               rowKey={(leg) => leg.id}
               renderCell={(leg, column) => {
                 switch (column.key) {
@@ -133,6 +167,17 @@ export default function DraftSwapsPanel({ address, goal }) {
                 <li key={note}>{note}</li>
               ))}
             </ul>
+          )}
+
+          {emailStatus === "unset" && (
+            <p className={styles.helper}>
+              No email saved for this wallet — add one from Settings to also get a copy of each draft by email.
+            </p>
+          )}
+          {emailStatus === "sending" && <p className={styles.helper}>Emailing this draft…</p>}
+          {emailStatus === "sent" && <p className={styles.helper}>Emailed a copy of this draft.</p>}
+          {emailStatus === "failed" && (
+            <p className={styles.helper}>Could not email this draft; it is still shown above.</p>
           )}
         </>
       )}

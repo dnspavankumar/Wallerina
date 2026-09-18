@@ -43,6 +43,15 @@ class PlanRequest(BaseModel):
     goal: str | None = Field(default=None, max_length=500)
 
 
+class EmailPlanRequest(BaseModel):
+    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    plan: ExecutionPlan
+
+
+class EmailPlanResponse(BaseModel):
+    sent: bool
+
+
 class PreparedTransaction(BaseModel):
     kind: str = Field(description="approve-reset, approve or swap")
     description: str

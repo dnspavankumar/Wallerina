@@ -55,6 +55,23 @@ class Settings(BaseSettings):
     zeroex_base_url: str = "https://api.0x.org"
     swap_slippage_bps: int = 100
 
+    # --- Mail (SMTP) --------------------------------------------------------
+    # Any SMTP server works; Gmail is the default because it needs no domain
+    # verification and delivers to any recipient once the sending account has
+    # an App Password — unlike Resend/Mailgun/SendGrid sandbox modes, which
+    # only deliver to a pre-authorized address until a domain is verified.
+    # Enable 2-Step Verification on the sending Google account, then generate
+    # one at https://myaccount.google.com/apppasswords — that, not the
+    # account password, goes in SMTP_PASSWORD. The draft-swaps email is the
+    # only mail Wallerina sends today; without credentials, drafts can still
+    # be built, they are just not emailed.
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    # Defaults to smtp_username when blank.
+    smtp_from_email: str = ""
+
     # --- Alchemy ----------------------------------------------------------
     alchemy_api_key: str = ""
     alchemy_data_base_url: str = "https://api.g.alchemy.com/data/v1"

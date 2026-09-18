@@ -130,6 +130,15 @@ export function fetchDraftSwaps(address, { goal, signal } = {}) {
   });
 }
 
+/* Emails a copy of an already-drafted plan. Nothing is re-drafted or executed. */
+export function emailDraftSwaps(address, { email, plan, signal } = {}) {
+  return request(`/api/execution/${address}/email`, {
+    method: "POST",
+    body: JSON.stringify({ email, plan }),
+    signal,
+  });
+}
+
 export function fetchRecommendationHistory(address, { limit = 10, signal } = {}) {
   return request(`/api/recommendation/${address}/history?limit=${limit}`, { signal });
 }
