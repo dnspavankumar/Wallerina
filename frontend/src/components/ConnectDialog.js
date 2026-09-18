@@ -21,6 +21,7 @@ export default function ConnectDialog({ open, onClose, redirectTo = "/dashboard"
   const router = useRouter();
   const [step, setStep] = useState("wallet");
   const [value, setValue] = useState("");
+  const [email, setEmail] = useState("");
   const [goal, setGoal] = useState("");
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
@@ -29,6 +30,7 @@ export default function ConnectDialog({ open, onClose, redirectTo = "/dashboard"
     if (open) {
       setStep("wallet");
       setValue("");
+      setEmail("");
       setGoal("");
       setError(null);
       // Defer so the element exists before focusing.
@@ -55,6 +57,11 @@ export default function ConnectDialog({ open, onClose, redirectTo = "/dashboard"
     if (!isValidAddress(value)) {
       setError("Enter a valid 42-character address starting with 0x");
       return;
+    }
+    try {
+      window.localStorage.setItem("email", email.trim());
+    } catch {
+      // Storage may be unavailable (private mode, disabled cookies); non-fatal.
     }
     // Reconnecting the same wallet starts from the goal it already has.
     const sameWallet = currentAddress?.toLowerCase() === value.trim().toLowerCase();
@@ -132,6 +139,24 @@ export default function ConnectDialog({ open, onClose, redirectTo = "/dashboard"
               ) : (
                 <p className={styles.hint}>42 characters, beginning with 0x.</p>
               )}
+
+              <label className={styles.label} htmlFor="wallet-email" style={{ marginTop: 18 }}>
+                Email (optional)
+              </label>
+              <input
+                id="wallet-email"
+                className={styles.input}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                spellCheck="false"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <p className={styles.hint}>
+                We&apos;ll use this to send you updates about this wallet.
+              </p>
 
               <button type="submit" className={styles.submit} disabled={!valid}>
                 Continue
