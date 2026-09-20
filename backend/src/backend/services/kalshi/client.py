@@ -140,7 +140,7 @@ async def _get(path: str, params: dict) -> dict:
     settings = get_settings()
 
     if breaker.is_open:
-        raise UpstreamError("Kalshi circuit breaker open")
+        raise UpstreamError(PROVIDER, "circuit breaker open")
 
     try:
         response = await get_client().get(
@@ -150,11 +150,11 @@ async def _get(path: str, params: dict) -> dict:
         )
     except Exception as error:  # noqa: BLE001 - upstream failures are expected
         breaker.record_failure()
-        raise UpstreamError(f"Kalshi request failed: {error}") from error
+        raise UpstreamError(PROVIDER, f"request failed: {error}") from error
 
     if response.status_code != 200:
         breaker.record_failure()
-        raise UpstreamError(f"Kalshi returned HTTP {response.status_code} for {path}")
+        raise UpstreamError(PROVIDER, f"returned HTTP {response.status_code} for {path}", response.status_code)
 
     breaker.record_success()
     return response.json()

@@ -31,6 +31,8 @@ from backend.assets.registry import CHAIN_IDS
 from backend.models.agents import Recommendation
 from backend.models.auth import NonceResponse, Session, SignInRequest
 from backend.models.execution import (
+    EmailPlanRequest,
+    EmailPlanResponse,
     ExecutionLeg,
     ExecutionPlan,
     ExecutionRecordRequest,
@@ -50,7 +52,7 @@ from backend.models.quant import (
     SimulationRequest,
     SimulationResult,
 )
-from backend.services import analysis, auth, chat, execution, history, http, refresh, swap, worker
+from backend.services import analysis, auth, chat, execution, history, http, mail, refresh, swap, worker
 from backend.services.cache import analysis_cache
 from backend.services.http import UpstreamError
 from backend.services.polymarket import client as polymarket
@@ -149,6 +151,10 @@ def _handle(error: Exception) -> HTTPException:
     """Map internal failures onto meaningful HTTP responses."""
     if isinstance(error, swap.SwapUnavailable):
         return HTTPException(status_code=503, detail=str(error))
+    if isinstance(error, mail.MailUnavailable):
+        return HTTPException(status_code=503, detail=str(error))
+    if isinstance(error, mail.MailSendError):
+        return HTTPException(status_code=502, detail=str(error))
     if isinstance(error, execution.QuoteRejected):
         return HTTPException(status_code=422, detail=str(error))
     if isinstance(error, analysis.InsufficientDataError):
@@ -586,6 +592,22 @@ async def execution_plan(address: str, request: PlanRequest) -> ExecutionPlan:
         slippage_bps=settings.swap_slippage_bps,
         swaps_configured=bool(settings.zeroex_api_key),
     )
+
+
+@app.post("/api/execution/{address}/email", response_model=EmailPlanResponse)
+async def execution_email(address: str, request: EmailPlanRequest) -> EmailPlanResponse:
+    """Email a copy of an already-drafted plan. Nothing is re-drafted or executed."""
+    if not ADDRESS_PATTERN.fullmatch(address):
+        raise HTTPException(status_code=400, detail="Enter a valid 42-character address starting with 0x")
+    if request.plan.address.lower() != address.lower():
+        raise HTTPException(status_code=400, detail="Plan address does not match the URL")
+
+    try:
+        await mail.send_draft_plan(request.email, request.plan)
+    except Exception as error:
+        raise _handle(error) from error
+
+    return EmailPlanResponse(sent=True)
 
 
 @app.post("/api/execution/{address}/quote", response_model=LegQuote)
